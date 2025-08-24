@@ -1,10 +1,18 @@
 #include "types.h"
 
-#define STRING_IMPLEMENTATION
-#include "string.h"
+#define TUI_IMPLEMENTATION
+#include "tui.h"
 
-#define TOOEE_IMPLEMENTATION
-#include "tooee.h"
+boolean string_equal(const char *sl, const char *sr)
+{
+  while (*sl != '\0' && *sr != '\0') {
+    if (*sl++ != *sr++) {
+      return FALSE;
+    }
+  }
+
+  return *sl == *sr;
+}
 
 #include <stdio.h>
 
@@ -16,54 +24,71 @@
       __FILE__,                                     \
       __LINE__                                      \
     );                                              \
+    abort();                                        \
   } while (FALSE)
 
 int main(int argc, char **argv)
 {
-  tooee_init();
-  atexit(tooee_deinit);
+  tui_init();
+  atexit(tui_deinit);
 
   char c;
   while (read(STDIN_FILENO, &c, 1)) {
-    switch (c) {
+    switch (c) { /* normal mode */
     case ':': {
-      char cmd;
-      read(STDIN_FILENO, &cmd, 1);
-      switch (cmd) {
-      case 'q': {
+      tui_cursor_move(10, -10);
+      write(STDOUT_FILENO, "\033[2K", 4);
+      write(STDOUT_FILENO, ":", 1);
+      char cmd[1024];
+      char l;
+      int i = 0;
+      while (read(STDIN_FILENO, &l, 1)) {
+        if (l == '\r') {
+          cmd[i] = '\0';
+          break;
+        } else {
+          write(STDOUT_FILENO, &l, 1);
+          cmd[i++] = l;
+        }
+      }
+
+      if (string_equal("q", cmd) || string_equal("quit", cmd)) {
         return 0;
-      } break;
-      default: {
-        UNREACHABLE;
-      } break;
       }
     }
     case 'h': {
-      tooee_cursor_move_left();
+      tui_cursor_move_left();
     } break;
     case 'j': {
-      write(STDOUT_FILENO, "\033[B", 3);
+      tui_cursor_move_down();
     } break;
     case 'k': {
-      write(STDOUT_FILENO, "\033[A", 3);
+      tui_cursor_move_up();
     } break;
     case 'l': {
-      write(STDOUT_FILENO, "\033[C", 3);
+      tui_cursor_move_right();
     } break;
-    case 'i': {
+    case 'i': { /* insert mode */
       char l;
       while (read(STDIN_FILENO, &l, 1)) {
-        if (l == '\033') { /* TODO: add ^C */
-          break;
-        }
-
-        if (l == '\r') {
+        switch (l) {
+        case '\033': { /* TODO: add ^C */
+          goto endwhile;
+        } break;
+        case 127:
+        case '\b': {
+          write(STDOUT_FILENO, "\b \b", 3);
+        } break;
+        case '\r': {
           write(STDOUT_FILENO, "\n" , 1);
           write(STDOUT_FILENO, "\033[1G", 4);
-        } else {
+        } break;
+        default: {
           write(STDOUT_FILENO, &l, 1);
+        } break;
         }
       }
+      endwhile:
     } break;
     }
   }
